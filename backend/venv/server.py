@@ -237,6 +237,70 @@ def insert_films():
     ])
     return make_response('Successfully operation.', 201)
 
+def get_file_lines(filename):
+    try:
+        file1 = open(filename, 'r')
+        lines = file1.readlines()
+        return len(lines)
+    except IOError:
+        return 0
+
+@app.route("/getstatistics", methods=["GET"])
+#@jwt_required()
+def get_statistics():
+    user_email = request.args.get('email')
+
+    preffered_films = []
+    informations = database.SACdb.users.find_one({'email_address': user_email})
+    for i in informations["films"]:
+        preffered_films.append(i)
+    
+    preffered_films_id = []
+    for i in preffered_films:
+        aux = database.SACdb.films.find_one({"title": i})
+        preffered_films_id.append(int(aux["movie_id"]))
+
+    user_file = './blob_user_films/' + hash_file_name(user_email)
+    check = os.path.isfile(user_file)
+    films_liked = []
+    if check is True:
+        file = open(user_file, 'r')
+        lines = file.readlines()
+        for line in lines:
+            films_liked.append(line.strip())
+    
+    liked_films_id = []
+    for i in films_liked:
+        aux = database.SACdb.films.find_one({"title": i})
+        liked_films_id.append(int(aux["movie_id"]))
+
+    watched_films_file = './watched_films/' + hash_file_name(user_email)
+    check = os.path.isfile(watched_films_file)
+    watched_films = []
+    if check is True:
+        file = open(watched_films_file, 'r')
+        lines = file.readlines()
+        for line in lines:
+            watched_films.append(line.strip())
+    
+    watched_films_id = []
+    for i in watched_films:
+        aux = database.SACdb.films.find_one({"title": i})
+        watched_films_id.append(int(aux["movie_id"]))
+
+    intralist_similarity = get_intralist_similarity(preffered_films_id, liked_films_id, watched_films_id, cosinus_matrix)
+
+    if int(get_file_lines('./blob_user_films/' + hash_file_name(user_email))) != 0:
+        statistics = [{
+            "is": intralist_similarity,
+            "bl": int(get_file_lines('./liked_r_l_films/' + hash_file_name(user_email))) / int(get_file_lines('./blob_user_films/' + hash_file_name(user_email))),
+            "bw": int(get_file_lines('./liked_r_w_films/' + hash_file_name(user_email))) / int(get_file_lines('./blob_user_films/' + hash_file_name(user_email))),
+            "ba": int(get_file_lines('./liked_r_3_m_films/' + hash_file_name(user_email))) / int(get_file_lines('./blob_user_films/' + hash_file_name(user_email)))
+        }]
+        return jsonify({'statistics': statistics})
+    else:
+        return jsonify({'statistics': []})
+
 #endregion
 
 #region USER BASIC FUNCTIONALITIES
@@ -376,12 +440,11 @@ def get_films_liked():
     user_email = request.args.get('email')
     user_file = './blob_user_films/' + hash_file_name(user_email)
 
+    films = []
     check = os.path.isfile(user_file)
     if check is True:
         file = open(user_file, 'r')
         lines = file.readlines()
-        # Strips the newline character
-        films = []
         for line in lines:
             films.append({
                 "name": line.strip()
@@ -398,13 +461,11 @@ def get_films_liked():
 def get_films_ignored():
     user_email = request.args.get('email')
     user_file = './ignored_user_films/' + hash_file_name(user_email)
-
+    films = []
     check = os.path.isfile(user_file)
     if check is True:
         file = open(user_file, 'r')
         lines = file.readlines()
-        # Strips the newline character
-        films = []
         for line in lines:
             films.append ({
                 "name": line.strip()
@@ -421,13 +482,11 @@ def get_films_ignored():
 def get_films_watched():
     user_email = request.args.get('email')
     user_file = './watched_films/' + hash_file_name(user_email)
-
+    films = []
     check = os.path.isfile(user_file)
     if check is True:
         file = open(user_file, 'r')
         lines = file.readlines()
-        # Strips the newline character
-        films = []
         for line in lines:
             films.append({
                 "name": line.strip()
@@ -811,63 +870,3 @@ def get_user_recommended_based_on_movies_preffered():
 
 #endregion
 
-def get_file_lines(filename):
-    try:
-        file1 = open(filename, 'r')
-        lines = file1.readlines()
-        return len(lines)
-    except IOError:
-        return 0
-
-@app.route("/getstatistics", methods=["GET"])
-#@jwt_required()
-def get_statistics():
-    user_email = request.args.get('email')
-
-    preffered_films = []
-    informations = database.SACdb.users.find_one({'email_address': user_email})
-    for i in informations["films"]:
-        preffered_films.append(i)
-    
-    preffered_films_id = []
-    for i in preffered_films:
-        aux = database.SACdb.films.find_one({"title": i})
-        preffered_films_id.append(int(aux["movie_id"]))
-
-    user_file = './blob_user_films/' + hash_file_name(user_email)
-    check = os.path.isfile(user_file)
-    films_liked = []
-    if check is True:
-        file = open(user_file, 'r')
-        lines = file.readlines()
-        for line in lines:
-            films_liked.append(line.strip())
-    
-    liked_films_id = []
-    for i in films_liked:
-        aux = database.SACdb.films.find_one({"title": i})
-        liked_films_id.append(int(aux["movie_id"]))
-
-    watched_films_file = './watched_films/' + hash_file_name(user_email)
-    check = os.path.isfile(watched_films_file)
-    watched_films = []
-    if check is True:
-        file = open(watched_films_file, 'r')
-        lines = file.readlines()
-        for line in lines:
-            watched_films.append(line.strip())
-    
-    watched_films_id = []
-    for i in watched_films:
-        aux = database.SACdb.films.find_one({"title": i})
-        watched_films_id.append(int(aux["movie_id"]))
-
-    intralist_similarity = get_intralist_similarity(preffered_films_id, liked_films_id, watched_films_id, cosinus_matrix)
-
-    statistics = [{
-        "is": intralist_similarity,
-        "bl": int(get_file_lines('./liked_r_l_films/' + hash_file_name(user_email))) / int(get_file_lines('./blob_user_films/' + hash_file_name(user_email))),
-        "bw": int(get_file_lines('./liked_r_w_films/' + hash_file_name(user_email))) / int(get_file_lines('./blob_user_films/' + hash_file_name(user_email))),
-        "ba": int(get_file_lines('./liked_r_3_m_films/' + hash_file_name(user_email))) / int(get_file_lines('./blob_user_films/' + hash_file_name(user_email)))
-    }]
-    return jsonify({'statistics': statistics})
